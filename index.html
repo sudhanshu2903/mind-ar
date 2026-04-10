@@ -6,6 +6,19 @@
   <meta name="description" content="Sarnath AR Heritage Walk — explore Chaukhandi Stupa, Ashoka's Pillar and the Jain Temple through augmented reality." />
   <title>Sarnath AR | Deer Park Heritage Walk</title>
 
+  <!--
+    COI Service Worker — MUST be loaded first, before anything else.
+    On GitHub Pages (and any host that can't set HTTP headers),
+    this script registers a service worker that injects:
+      Cross-Origin-Opener-Policy: same-origin
+      Cross-Origin-Embedder-Policy: require-corp
+    Those headers enable SharedArrayBuffer, which MindAR's WASM
+    tracking engine requires. Without them getUserMedia is never
+    reached and the camera prompt never appears.
+    The page will reload once automatically after the SW activates.
+  -->
+  <script src="coi-serviceworker.js"></script>
+
   <!-- MindAR + A-Frame (MindAR bundles its own A-Frame 1.4) -->
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -20,8 +33,10 @@
       position: fixed; inset: 0; z-index: 4000;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 18px;
-      background: radial-gradient(ellipse at center, #15100500 0%, #0a0700 100%),
-                  linear-gradient(160deg, #1a1000 0%, #0a0600 100%);
+      /* Semi-transparent so the camera feed shows through behind it.
+         The solid dark bg is only needed before the camera starts —
+         once targetFound fires we fade this overlay out entirely. */
+      background: radial-gradient(ellipse at center, rgba(21,16,5,0.92) 0%, rgba(10,7,0,0.97) 100%);
       color: #fff;
       transition: opacity 0.7s ease;
     }
