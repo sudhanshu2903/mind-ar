@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- This tells the phone to use its full screen width -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- The title shown in the browser tab -->
+    <title>AR Map Experience</title>
+
+    <!-- Load A-Frame - this is the 3D scene library -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
+    <!-- Load MindAR - this is the image tracking library -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+        /* Make the page fill the full screen with no scrollbars */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* The "Start AR" button - needed for iPhone users */
+        #start-button {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 16px 32px;
+            background: #1a1a2e;
+            color: white;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 999;
+        }
+
+        #start-button:hover {
+            background: #16213e;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Start button overlay (for iPhone/iOS compatibility) -->
+    <button id="start-button">📷 Tap to Start AR</button>
+
+    <!--
+      THE AR SCENE
+      mindar-image: tells MindAR where your .mind file is
+      vr-mode-ui: we don't need VR mode, so disable it
+      device-orientation-permission-ui: disabling the default popup
+    -->
+    <a-scene id="ar-scene" mindar-image="imageTargetSrc: targets.mind; autoStart: false;" color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+
+        <!-- ==========================================
+           ASSETS: Preload everything here
+           ========================================== -->
+        <a-assets>
+            <!-- Your map image (used as a reference plane) -->
+            <img id="map-image" src="assets/map.jpg" />
+        </a-assets>
+
+        <!-- Camera: keeps the phone camera feed in the background -->
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- ==========================================
+           IMAGE TARGET: Everything inside here
+           appears ON TOP of your map when scanned
+           targetIndex: 0 means the first image in your .mind file
+           ========================================== -->
+        <a-entity mindar-image-target="targetIndex: 0">
+
+            <!-- ==========================================
+             LAYER 1: REFERENCE PLANE
+             This invisible flat plane matches the
+             exact size and position of your map.
+             It is the "floor" everything sits on.
+             width/height: adjust to match your map's
+             aspect ratio (width ÷ height)
+             ========================================== -->
+            <a-plane width="1" height="0.75" position="0 0 0" rotation="-90 0 0" opacity="0" visible="false"></a-plane>
+
+            <!-- ==========================================
+             LAYER 2: TEXT LABELS
+             position="X Y Z"
+               X: left(-) to right(+), range roughly -0.5 to 0.5
+               Y: up(+) to down(-), range roughly 0.3 to -0.3
+               Z: how high above the map (0.01 = just above surface)
+             ========================================== -->
+
+            <!-- Label 1: appears at a location on your map -->
+            <a-text value="City Hall" position="-0.15 0.05 0.01" rotation="-90 0 0" scale="0.08 0.08 0.08"
+                color="#ffffff" align="center"></a-text>
+
+            <!-- Label 2: another location -->
+            <a-text value="Main Square" position="0.1 0.1 0.01" rotation="-90 0 0" scale="0.08 0.08 0.08"
+                color="#ffff00" align="center"></a-text>
+
+            <!-- ==========================================
+             LAYER 3: ANIMATED ROUTE LINE
+             This is a thin box that "draws" itself
+             across the map using a width animation
+             ========================================== -->
+
+            <!-- Route segment 1 -->
+            <a-box id="route1" position="-0.05 0 0.005" rotation="-90 0 0" width="0" height="0.008" depth="0.001"
+                color="#ff4444"
+                animation="property: width; from: 0; to: 0.25; dur: 1500; delay: 500; easing: easeInOutQuad"></a-box>
+
+            <!-- Route segment 2 (starts after segment 1 finishes) -->
+            <a-box id="route2" position="0.1 0.08 0.005" rotation="-90 45 0" width="0" height="0.008" depth="0.001"
+                color="#ff4444"
+                animation="property: width; from: 0; to: 0.2; dur: 1200; delay: 2000; easing: easeInOutQuad"></a-box>
+
+            <!-- ==========================================
+             LAYER 4: 3D LANDMARK (Box stand-in)
+             Replace the a-box later with a-gltf-model
+             once you have a real 3D model
+
+             The "pop-up" animation:
+             - starts at scale 0 (invisible)
+             - grows to full size over 800ms
+             ========================================== -->
+            <a-box position="-0.2 0.05 0.03" rotation="-90 0 0" width="0.04" height="0.04" depth="0.06" color="#4488ff"
+                animation="property: scale; from: 0 0 0; to: 1 1 1; dur: 800; delay: 300; easing: easeOutElastic"></a-box>
+
+            <!-- Label for the 3D landmark above -->
+            <a-text value="Museum" position="-0.2 0.05 0.08" rotation="-90 0 0" scale="0.06 0.06 0.06" color="#aaddff"
+                align="center"></a-text>
+
+            <!-- Another 3D landmark (positioned differently) -->
+            <a-box position="0.15 -0.05 0.03" rotation="-90 0 0" width="0.035" height="0.035" depth="0.05"
+                color="#44ff88"
+                animation="property: scale; from: 0 0 0; to: 1 1 1; dur: 800; delay: 600; easing: easeOutElastic"></a-box>
+
+            <a-text value="Park" position="0.15 -0.05 0.07" rotation="-90 0 0" scale="0.06 0.06 0.06" color="#aaffcc"
+                align="center"></a-text>
+
+        </a-entity>
+        <!-- End of image target -->
+
+    </a-scene>
+    <!-- End of AR scene -->
+
+    <!-- ==========================================
+         JAVASCRIPT: Controls the start button
+         and AR session
+         ========================================== -->
+    <script>
+        const startBtn = document.getElementById('start-button');
+        const scene = document.getElementById('ar-scene');
+
+        // When the button is clicked, start the AR camera
+        startBtn.addEventListener('click', () => {
+            startBtn.style.display = 'none'; // hide the button
+            const mindarSystem = scene.systems['mindar-image-system'];
+            mindarSystem.start(); // start the camera and tracking
+        });
+
+        // When the map is detected, you can log it or trigger things
+        scene.addEventListener('targetFound', () => {
+            console.log('Map detected! AR content is now showing.');
+        });
+
+        // When the map is lost from view
+        scene.addEventListener('targetLost', () => {
+            console.log('Map lost from view.');
+        });
+    </script>
+
+</body>
+
+</html>
