@@ -3,471 +3,574 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Sarnath Pilgrimage AR</title>
+  <meta name="description" content="Sarnath AR Heritage Walk — explore Chaukhandi Stupa, Ashoka's Pillar and the Jain Temple through augmented reality." />
+  <title>Sarnath AR | Deer Park Heritage Walk</title>
+
+  <!-- MindAR + A-Frame (MindAR bundles its own A-Frame 1.4) -->
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { overflow: hidden; background: #000; font-family: Georgia, 'Times New Roman', serif; }
 
-    /* ── Info Panels ─────────────────────────────────────── */
+    /* ═══════════════════════════════════════════════
+       LOADING / SCAN OVERLAY
+    ═══════════════════════════════════════════════ */
+    #scan-overlay {
+      position: fixed; inset: 0; z-index: 4000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      background: radial-gradient(ellipse at center, #15100500 0%, #0a0700 100%),
+                  linear-gradient(160deg, #1a1000 0%, #0a0600 100%);
+      color: #fff;
+      transition: opacity 0.7s ease;
+    }
+    #scan-overlay.fade-out { opacity: 0; pointer-events: none; }
+    #scan-overlay.gone    { display: none; }
+
+    .overlay-wheel {
+      font-size: 52px; line-height: 1;
+      animation: spin 5s linear infinite;
+      filter: drop-shadow(0 0 14px #c9a84c99);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .overlay-title {
+      font-size: clamp(1.6rem, 7vw, 2.4rem);
+      font-weight: normal; letter-spacing: .18em;
+      color: #d4ab4e;
+      text-shadow: 0 0 28px #c9a84c88;
+    }
+    .overlay-sub {
+      font-size: .78rem; letter-spacing: .22em;
+      text-transform: uppercase; color: #a08030; margin-top: -10px;
+    }
+
+    /* Viewfinder frame */
+    .vf-frame {
+      position: relative; width: 200px; height: 200px;
+      margin: 8px 0;
+    }
+    .vf-frame::before, .vf-frame::after,
+    .vf-frame .vf-br, .vf-frame .vf-bl {
+      content: '';
+      position: absolute; width: 28px; height: 28px;
+      border-color: #d4ab4e; border-style: solid; opacity: .9;
+    }
+    .vf-frame::before { top: 0; left: 0;  border-width: 2px 0 0 2px; }
+    .vf-frame::after  { top: 0; right: 0; border-width: 2px 2px 0 0; }
+    .vf-frame .vf-br  { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+    .vf-frame .vf-bl  { bottom: 0; left: 0;  border-width: 0 0 2px 2px; }
+
+    /* Animated scan line inside viewfinder */
+    .scan-line {
+      position: absolute; left: 4px; right: 4px; top: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #d4ab4e, transparent);
+      animation: scanDown 2s ease-in-out infinite;
+      box-shadow: 0 0 8px #d4ab4e;
+    }
+    @keyframes scanDown {
+      0%   { top: 4px;  opacity: 1; }
+      80%  { top: 192px; opacity: 1; }
+      100% { top: 192px; opacity: 0; }
+    }
+
+    .overlay-hint {
+      font-family: -apple-system, sans-serif;
+      font-size: .8rem; color: rgba(255,255,255,.55);
+      text-align: center; max-width: 240px; line-height: 1.7;
+    }
+
+    /* ═══════════════════════════════════════════════
+       HUD — TOP BAR
+    ═══════════════════════════════════════════════ */
+    #hud-top {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 3500; pointer-events: none;
+    }
+
+    /* Progress bar */
+    #tour-bar {
+      height: 3px; width: 0%;
+      background: linear-gradient(90deg, #e8543a 0%, #c9a84c 55%, #6cc49a 100%);
+      transition: width .55s ease, opacity .7s;
+    }
+
+    /* Stop strip */
+    #stop-strip {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 7px 0;
+      opacity: 0; transition: opacity .5s;
+    }
+    #stop-strip.visible { opacity: 1; }
+    .stop-pip {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: rgba(255,255,255,.18);
+      border: 1.5px solid rgba(255,255,255,.22);
+      transition: background .4s, transform .35s;
+    }
+    .stop-pip.lit { transform: scale(1.4); }
+    .stop-conn {
+      width: 24px; height: 1.5px;
+      background: rgba(255,255,255,.18);
+    }
+    .stop-label {
+      font-family: -apple-system, sans-serif;
+      font-size: 9px; color: rgba(255,255,255,.45);
+      letter-spacing: .3px; white-space: nowrap;
+    }
+
+    /* ═══════════════════════════════════════════════
+       BOTTOM STATUS CHIP
+    ═══════════════════════════════════════════════ */
+    #status-chip {
+      position: fixed; bottom: 105px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 3000; pointer-events: none;
+      background: rgba(10,6,0,.72);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(201,168,76,.35);
+      border-radius: 24px;
+      padding: 7px 18px;
+      font-family: -apple-system, sans-serif;
+      font-size: 12px; color: rgba(255,255,255,.82);
+      white-space: nowrap;
+      transition: opacity .4s, transform .4s;
+    }
+    #status-chip.hide {
+      opacity: 0; transform: translateX(-50%) translateY(6px);
+    }
+
+    /* ═══════════════════════════════════════════════
+       INFO PANELS
+    ═══════════════════════════════════════════════ */
     .info-panel {
       display: none;
-      position: fixed;
-      z-index: 3000;
-      bottom: 28px;
-      left: 50%;
+      position: fixed; z-index: 3000;
+      bottom: 28px; left: 50%;
       transform: translateX(-50%);
-      width: min(92vw, 360px);
-      border-radius: 14px;
-      overflow: hidden;
-      background: rgba(14, 8, 2, 0.96);
-      border: 1px solid rgba(201, 168, 76, 0.65);
-      box-shadow: 0 8px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(201,168,76,0.08);
-      animation: slideUp 0.38s cubic-bezier(0.34,1.4,0.64,1) forwards;
+      width: min(92vw, 370px);
+      border-radius: 14px; overflow: hidden;
+      background: rgba(12,7,2,.96);
+      border: 1px solid rgba(201,168,76,.55);
+      box-shadow: 0 10px 50px rgba(0,0,0,.85);
+      animation: panelUp .38s cubic-bezier(.34,1.4,.64,1) forwards;
     }
     .info-panel.active { display: block; }
 
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateX(-50%) translateY(24px) scale(0.97); }
+    @keyframes panelUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(22px) scale(.97); }
       to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
     }
 
+    .panel-accent { height: 3.5px; width: 100%; }
+
     .panel-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      display: flex; align-items: center; gap: 10px;
       padding: 13px 14px 11px;
-      border-bottom: 1px solid rgba(201,168,76,0.18);
-      background: rgba(201,168,76,0.06);
+      background: rgba(201,168,76,.05);
+      border-bottom: 1px solid rgba(201,168,76,.16);
     }
     .panel-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      flex-shrink: 0;
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
-    .panel-title {
-      flex: 1;
-      font-size: 14px;
-      font-weight: bold;
-      color: #d4ab4e;
-      letter-spacing: 0.15px;
+    .panel-name {
+      flex: 1; font-size: 14.5px; font-weight: bold;
+      color: #d4ab4e; letter-spacing: .15px;
     }
-    .panel-close {
-      width: 24px; height: 24px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.5);
-      font-size: 13px;
-      cursor: pointer;
+    .panel-era {
+      font-size: 10.5px; color: rgba(201,168,76,.7);
+      font-family: -apple-system, sans-serif;
+      font-weight: normal; letter-spacing: .1px;
+    }
+    .panel-close-btn {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.55); font-size: 13px;
+      cursor: pointer; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.18s, color 0.18s;
-      user-select: none;
+      transition: background .18s, color .18s;
+      user-select: none; -webkit-tap-highlight-color: transparent;
     }
-    .panel-close:active { background: rgba(255,255,255,0.14); color: #fff; }
+    .panel-close-btn:active { background: rgba(255,255,255,.16); color: #fff; }
 
     .panel-body {
-      padding: 12px 14px 16px;
-      font-size: 13px;
-      line-height: 1.68;
-      color: #ddd0b0;
+      padding: 13px 15px 17px;
+      font-size: 13.5px; line-height: 1.72;
+      color: #d5c8a6;
     }
     .panel-body strong { color: #d4ab4e; font-weight: normal; font-style: italic; }
 
-    /* ── Tap hint badge ───────────────────────────────────── */
-    .tap-badge {
-      position: absolute;
-      bottom: -18px; left: 50%;
+    /* ═══════════════════════════════════════════════
+       TAP HINT
+    ═══════════════════════════════════════════════ */
+    #tap-hint {
+      position: fixed; bottom: 28px; left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.75);
-      color: rgba(255,255,255,0.8);
-      font-size: 9px;
-      padding: 2px 7px;
-      border-radius: 8px;
+      z-index: 2500; pointer-events: none;
+      background: rgba(0,0,0,.6); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 22px; padding: 8px 20px;
+      font-family: -apple-system, sans-serif;
+      font-size: 12px; color: rgba(255,255,255,.65);
       white-space: nowrap;
-      pointer-events: none;
-      font-family: -apple-system, sans-serif;
+      transition: opacity .5s;
     }
-
-    /* ── Scan hint ────────────────────────────────────────── */
-    #scan-hint {
-      position: fixed;
-      bottom: 32px; left: 50%;
-      transform: translateX(-50%);
-      z-index: 2000;
-      background: rgba(0,0,0,0.6);
-      color: rgba(255,255,255,0.88);
-      padding: 10px 22px;
-      border-radius: 30px;
-      font-size: 13px;
-      font-family: -apple-system, sans-serif;
-      white-space: nowrap;
-      pointer-events: none;
-      border: 1px solid rgba(255,255,255,0.1);
-      transition: opacity 0.6s, transform 0.6s;
-    }
-    #scan-hint.hidden {
-      opacity: 0;
-      transform: translateX(-50%) translateY(8px);
-      pointer-events: none;
-    }
-
-    /* ── Progress bar ─────────────────────────────────────── */
-    #tour-bar {
-      position: fixed;
-      top: 0; left: 0;
-      height: 3px; width: 0%;
-      background: linear-gradient(90deg, #e8543a 0%, #c9a84c 55%, #6cc49a 100%);
-      z-index: 2000;
-      border-radius: 0 2px 2px 0;
-      transition: width 0.55s ease, opacity 0.7s;
-      pointer-events: none;
-    }
-
-    /* ── Stop indicator strip ─────────────────────────────── */
-    #stop-strip {
-      position: fixed;
-      top: 8px; left: 50%;
-      transform: translateX(-50%);
-      display: flex; gap: 7px; align-items: center;
-      z-index: 2000;
-      opacity: 0;
-      transition: opacity 0.5s;
-      pointer-events: none;
-    }
-    #stop-strip.visible { opacity: 1; }
-    .stop-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: rgba(255,255,255,0.25);
-      transition: background 0.4s, transform 0.4s;
-    }
-    .stop-dot.reached {
-      transform: scale(1.3);
-    }
-    #stop-strip .stop-label {
-      font-size: 10px;
-      font-family: -apple-system, sans-serif;
-      color: rgba(255,255,255,0.55);
-      letter-spacing: 0.4px;
-    }
+    #tap-hint.hide { opacity: 0; }
   </style>
 </head>
 <body>
 
 <!-- ═══════════════════════════════════════════════
+     LOADING / SCAN OVERLAY
+═══════════════════════════════════════════════ -->
+<div id="scan-overlay" aria-live="polite" aria-label="Scanning for Sarnath map">
+  <div class="overlay-wheel">☸</div>
+  <div class="overlay-title">SARNATH</div>
+  <div class="overlay-sub">Deer Park Heritage Walk</div>
+  <div class="vf-frame">
+    <div class="scan-line"></div>
+    <div class="vf-br"></div>
+    <div class="vf-bl"></div>
+  </div>
+  <p class="overlay-hint">Point your camera at the<br>Sarnath map to begin the AR tour</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     HUD TOP
+═══════════════════════════════════════════════ -->
+<div id="hud-top">
+  <div id="tour-bar"></div>
+  <div id="stop-strip">
+    <div class="stop-pip" id="pip-1" style="border-color:#e8543a66"></div>
+    <span class="stop-label">Chaukhandi</span>
+    <div class="stop-conn"></div>
+    <div class="stop-pip" id="pip-2" style="border-color:#c9a84c66"></div>
+    <span class="stop-label">Ashoka's Pillar</span>
+    <div class="stop-conn"></div>
+    <div class="stop-pip" id="pip-3" style="border-color:#6cc49a66"></div>
+    <span class="stop-label">Jain Temple</span>
+  </div>
+</div>
+
+<!-- Status chip -->
+<div id="status-chip">📍 Point camera at the Sarnath map</div>
+
+<!-- Tap hint bar at bottom -->
+<div id="tap-hint">👆 Tap a glowing marker to learn more</div>
+
+<!-- ═══════════════════════════════════════════════
      INFO PANELS
 ═══════════════════════════════════════════════ -->
 
-<div id="panel-chaukhandi" class="info-panel">
+<!-- Panel 1 — Chaukhandi Stupa -->
+<div id="panel-chaukhandi" class="info-panel" role="dialog" aria-label="Chaukhandi Stupa info">
+  <div class="panel-accent" style="background:#e8543a"></div>
   <div class="panel-header">
-    <div class="panel-dot" style="background:#e8543a;box-shadow:0 0 6px #e8543a88"></div>
-    <span class="panel-title">Chaukhandi Stupa</span>
-    <div class="panel-close" onclick="closePanel('panel-chaukhandi')" role="button" aria-label="Close">✕</div>
+    <div class="panel-dot" style="background:#e8543a;box-shadow:0 0 7px #e8543a88"></div>
+    <div>
+      <div class="panel-name">Chaukhandi Stupa</div>
+      <div class="panel-era">4th – 6th Century CE · Gupta Period</div>
+    </div>
+    <button class="panel-close-btn" onclick="closePanel('panel-chaukhandi')" aria-label="Close">✕</button>
   </div>
   <div class="panel-body">
-    Built during the <strong>Gupta period (4th–6th century CE)</strong>, this stupa marks where the Buddha first met his five disciples after attaining enlightenment at Bodh Gaya. The octagonal Mughal tower crowning it was commissioned in the 16th century to honour Emperor Humayun's visit to the site.
+    Built during the <strong>Gupta period</strong>, this stupa marks the very spot where the Buddha met his five ascetic disciples upon arriving at Sarnath after his enlightenment at Bodh Gaya. The octagonal Mughal tower atop the mound was commissioned in the <strong>16th century CE</strong>, possibly to honour Emperor Humayun's visit. It remains the first landmark on the ancient pilgrimage circuit.
   </div>
 </div>
 
-<div id="panel-ashoka" class="info-panel">
+<!-- Panel 2 — Ashoka's Pillar -->
+<div id="panel-ashoka" class="info-panel" role="dialog" aria-label="Ashoka's Pillar info">
+  <div class="panel-accent" style="background:#c9a84c"></div>
   <div class="panel-header">
-    <div class="panel-dot" style="background:#c9a84c;box-shadow:0 0 6px #c9a84c88"></div>
-    <span class="panel-title">Ashoka's Pillar</span>
-    <div class="panel-close" onclick="closePanel('panel-ashoka')" role="button" aria-label="Close">✕</div>
+    <div class="panel-dot" style="background:#c9a84c;box-shadow:0 0 7px #c9a84c88"></div>
+    <div>
+      <div class="panel-name">Ashoka's Pillar</div>
+      <div class="panel-era">c. 250 BCE · Maurya Period</div>
+    </div>
+    <button class="panel-close-btn" onclick="closePanel('panel-ashoka')" aria-label="Close">✕</button>
   </div>
   <div class="panel-body">
-    Erected <strong>c. 250 BCE by Emperor Ashoka</strong> to mark the spot of the Buddha's First Sermon — the Dhammacakkappavattana Sutta. The polished sandstone shaft originally stood over 15 m tall. Its famous lion capital, four lions standing back-to-back, is now India's national emblem and is displayed in the Sarnath Museum nearby.
+    Erected by <strong>Emperor Ashoka</strong> to mark the site of the Buddha's First Sermon — the <em>Dhammacakkappavattana Sutta</em>. The polished Chunar sandstone pillar originally soared over 15 m high. Its famous <strong>Lion Capital</strong>, four lions standing back-to-back atop an abacus of dharma-wheels, became modern India's national emblem and is now housed in the Sarnath Museum.
   </div>
 </div>
 
-<div id="panel-jain" class="info-panel">
+<!-- Panel 3 — Jain Temple -->
+<div id="panel-jain" class="info-panel" role="dialog" aria-label="Jain Temple info">
+  <div class="panel-accent" style="background:#6cc49a"></div>
   <div class="panel-header">
-    <div class="panel-dot" style="background:#6cc49a;box-shadow:0 0 6px #6cc49a88"></div>
-    <span class="panel-title">Jain Temple &amp; Monastery V</span>
-    <div class="panel-close" onclick="closePanel('panel-jain')" role="button" aria-label="Close">✕</div>
+    <div class="panel-dot" style="background:#6cc49a;box-shadow:0 0 7px #6cc49a88"></div>
+    <div>
+      <div class="panel-name">Jain Temple · Monastery V</div>
+      <div class="panel-era">Sarnath · Multi-faith Sacred Site</div>
+    </div>
+    <button class="panel-close-btn" onclick="closePanel('panel-jain')" aria-label="Close">✕</button>
   </div>
   <div class="panel-body">
-    The <strong>Jain Temple</strong> here venerates Shreyansanatha, the 11th Tirthankara, believed to have been born at this very site. Monastery V is among several ancient monastic ruins excavated nearby, showing how Sarnath thrived as a <strong>multi-faith centre</strong> of pilgrimage and learning for over a millennium.
+    The <strong>Jain Temple</strong> here venerates Shreyansanatha, the 11th Tirthankara, believed to have taken birth at this very site. Monastery V is among several ancient monastic complexes excavated nearby, revealing how Sarnath thrived across centuries as a <strong>multi-faith centre</strong> of pilgrimage, scholarship, and artistic creation.
   </div>
-</div>
-
-<!-- Scan hint -->
-<div id="scan-hint">📍 Point camera at the Sarnath map</div>
-
-<!-- Progress bar -->
-<div id="tour-bar"></div>
-
-<!-- Stop indicator -->
-<div id="stop-strip">
-  <div class="stop-dot" id="dot-1" style="background:#e8543a44"></div>
-  <span class="stop-label">Chaukhandi</span>
-  <div class="stop-dot" id="dot-2" style="background:#c9a84c44"></div>
-  <span class="stop-label">Ashoka</span>
-  <div class="stop-dot" id="dot-3" style="background:#6cc49a44"></div>
-  <span class="stop-label">Jain Temple</span>
 </div>
 
 <!-- ═══════════════════════════════════════════════
      A-FRAME / MIND-AR SCENE
 ═══════════════════════════════════════════════ -->
 <a-scene
-  mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; uiError: yes"
+  mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: yes"
   color-space="sRGB"
   renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true"
   vr-mode-ui="enabled: false"
   device-orientation-permission-ui="enabled: false"
-  embedded
 >
-
+  <!--
+    Camera + cursor
+    The cursor fires A-Frame's 'click' event on whatever mesh
+    the raycaster intersects. Works for mouse on desktop AND
+    single-tap on mobile (MindAR sets up touch → click mapping).
+  -->
   <a-camera position="0 0 0" look-controls="enabled: false">
-    <!--
-      The cursor enables A-Frame click events on 3D objects.
-      On mobile: tapping the screen fires click from cursor center.
-      On desktop: hover + click works normally.
-    -->
     <a-cursor
       fuse="false"
-      raycaster="objects: .hittable; far: 6; recursive: true"
-      material="color: rgba(255,255,255,0.6); shader: flat; opacity: 0.7; transparent: true"
+      raycaster="objects: .hittable; far: 6; recursive: false"
+      material="color: rgba(255,255,255,0.5); shader: flat; opacity: 0.65; transparent: true"
       geometry="primitive: ring; radiusInner: 0.004; radiusOuter: 0.007"
-      animation__click="property: scale; startEvents: click; from: 0.8 0.8 0.8; to: 1 1 1; dur: 200"
+      animation__click="property: scale; startEvents: click; from: 0.7 0.7 0.7; to: 1 1 1; dur: 180"
     ></a-cursor>
   </a-camera>
 
   <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
 
     <!--
-      PATH CANVAS PLANE
-      Covers the full image: width=1 unit, height=1.6 units
-      (image is ~300×480 → aspect ratio 1.6)
-      Rendered just in front of the image at z=0.001
+      PATH PLANE
+      ══════════════════════════════════════════════════════════════
+      Coordinate system (portrait image, W×H ≈ 512×819):
+        • In A-Frame the image width  maps to 1.0 world units.
+        • Height → 819/512 ≈ 1.6 world units.
+        • Origin (0,0) is the IMAGE CENTRE.
+        • Canvas → A-Frame:
+            af_x = (canvas_px_x / 512) - 0.5
+            af_y = 0.8 - (canvas_px_y / 819) * 1.6
+      ══════════════════════════════════════════════════════════════
     -->
     <a-plane
       id="path-plane"
-      width="1"
-      height="1.6"
-      position="0 0 0.001"
-      material="transparent: true; alphaTest: 0.005; side: double; depthWrite: false"
+      width="1" height="1.6"
+      position="0 0 0.0015"
+      material="transparent: true; alphaTest: 0.01; side: double; depthWrite: false"
       path-animator
     ></a-plane>
 
-    <!-- ════════════ STOP 1 — Chaukhandi Stupa ════════════
-         Canvas pos ~ (80, 590) on 512×819
-         A-Frame: x = 80/512-0.5 = -0.344, y = 0.8-(590/819)*1.6 = -0.352
-    ═══════════════════════════════════════════════════════ -->
-    <a-entity
-      id="marker-chaukhandi"
-      position="-0.34 -0.35 0.012"
-      visible="false"
-    >
-      <!-- Pin stem -->
-      <a-cylinder
-        height="0.055" radius="0.007"
-        position="0 0.007 0"
-        material="shader: flat; color: #e8543a; emissive: #e8543a; emissiveIntensity: 1"
-      ></a-cylinder>
-      <!-- Pin head (pulsing) -->
-      <a-sphere
-        radius="0.021" position="0 0.042 0"
-        material="shader: flat; color: #e8543a; emissive: #e8543a; emissiveIntensity: 1"
-        animation="property: scale; from: 1 1 1; to: 1.45 1.45 1.45; loop: true; dir: alternate; dur: 820; easing: easeInOutSine"
-      ></a-sphere>
-      <!-- Ripple ring -->
-      <a-torus radius="0.026" radius-tubular="0.003"
-        position="0 0.042 0" rotation="90 0 0"
-        material="shader: flat; color: #e8543a; opacity: 0.75; transparent: true"
-        animation__s="property: scale; from: 1 1 1; to: 3 3 3; loop: true; dur: 1500; easing: easeOutQuad"
-        animation__o="property: material.opacity; from: 0.75; to: 0; loop: true; dur: 1500"
-      ></a-torus>
-      <!-- Hit area — this is what the raycaster intersects -->
-      <a-sphere
-        class="hittable"
-        id="hit-chaukhandi"
-        radius="0.065"
-        position="0 0.02 0"
-        material="opacity: 0; transparent: true; side: double"
-      ></a-sphere>
+    <!-- ══════════════════════════════════════════
+         STOP 1  —  Chaukhandi Stupa (bottom-left)
+         Canvas ≈ (80, 590) on 512×819
+         af: x = 80/512 - 0.5 = -0.344
+             y = 0.8 - (590/819)*1.6 = -0.352
+    ══════════════════════════════════════════ -->
+    <a-entity id="marker-chaukhandi" position="-0.344 -0.352 0.014" visible="false">
+      <!-- stem -->
+      <a-cylinder height="0.055" radius="0.007" position="0 0.007 0"
+        material="shader:flat;color:#e8543a;emissive:#e8543a;emissiveIntensity:1"></a-cylinder>
+      <!-- head (pulsing) -->
+      <a-sphere radius="0.021" position="0 0.042 0"
+        material="shader:flat;color:#e8543a;emissive:#e8543a;emissiveIntensity:1"
+        animation="property:scale;from:1 1 1;to:1.45 1.45 1.45;loop:true;dir:alternate;dur:820;easing:easeInOutSine">
+      </a-sphere>
+      <!-- ripple ring -->
+      <a-torus radius="0.027" radius-tubular="0.003"
+        position="0 0.001 0" rotation="90 0 0"
+        material="shader:flat;color:#e8543a;opacity:0.7;transparent:true"
+        animation__s="property:scale;from:1 1 1;to:3.2 3.2 3.2;loop:true;dur:1600;easing:easeOutQuad"
+        animation__o="property:material.opacity;from:0.7;to:0;loop:true;dur:1600">
+      </a-torus>
+      <!-- invisible hit sphere (raycaster target) -->
+      <a-sphere class="hittable" id="hit-chaukhandi" radius="0.07" position="0 0.02 0"
+        material="opacity:0;transparent:true;side:double"></a-sphere>
     </a-entity>
 
-    <!-- ════════════ STOP 2 — Ashoka's Pillar ════════════
-         Canvas pos ~ (52, 200) on 512×819
-         A-Frame: x = 52/512-0.5 = -0.398, y = 0.8-(200/819)*1.6 = 0.409
-    ══════════════════════════════════════════════════════ -->
-    <a-entity
-      id="marker-ashoka"
-      position="-0.40 0.41 0.012"
-      visible="false"
-    >
-      <a-cylinder
-        height="0.055" radius="0.007"
-        position="0 0.007 0"
-        material="shader: flat; color: #c9a84c; emissive: #c9a84c; emissiveIntensity: 1"
-      ></a-cylinder>
-      <a-sphere
-        radius="0.021" position="0 0.042 0"
-        material="shader: flat; color: #c9a84c; emissive: #c9a84c; emissiveIntensity: 1"
-        animation="property: scale; from: 1 1 1; to: 1.45 1.45 1.45; loop: true; dir: alternate; dur: 820; easing: easeInOutSine"
-      ></a-sphere>
-      <a-torus radius="0.026" radius-tubular="0.003"
-        position="0 0.042 0" rotation="90 0 0"
-        material="shader: flat; color: #c9a84c; opacity: 0.75; transparent: true"
-        animation__s="property: scale; from: 1 1 1; to: 3 3 3; loop: true; dur: 1500; easing: easeOutQuad"
-        animation__o="property: material.opacity; from: 0.75; to: 0; loop: true; dur: 1500"
-      ></a-torus>
-      <a-sphere
-        class="hittable"
-        id="hit-ashoka"
-        radius="0.065"
-        position="0 0.02 0"
-        material="opacity: 0; transparent: true; side: double"
-      ></a-sphere>
+    <!-- ══════════════════════════════════════════
+         STOP 2  —  Ashoka's Pillar (top-left)
+         Canvas ≈ (50, 200) on 512×819
+         af: x = 50/512 - 0.5 = -0.402
+             y = 0.8 - (200/819)*1.6 = 0.409
+    ══════════════════════════════════════════ -->
+    <a-entity id="marker-ashoka" position="-0.402 0.409 0.014" visible="false">
+      <a-cylinder height="0.055" radius="0.007" position="0 0.007 0"
+        material="shader:flat;color:#c9a84c;emissive:#c9a84c;emissiveIntensity:1"></a-cylinder>
+      <a-sphere radius="0.021" position="0 0.042 0"
+        material="shader:flat;color:#c9a84c;emissive:#c9a84c;emissiveIntensity:1"
+        animation="property:scale;from:1 1 1;to:1.45 1.45 1.45;loop:true;dir:alternate;dur:820;easing:easeInOutSine">
+      </a-sphere>
+      <a-torus radius="0.027" radius-tubular="0.003"
+        position="0 0.001 0" rotation="90 0 0"
+        material="shader:flat;color:#c9a84c;opacity:0.7;transparent:true"
+        animation__s="property:scale;from:1 1 1;to:3.2 3.2 3.2;loop:true;dur:1600;easing:easeOutQuad"
+        animation__o="property:material.opacity;from:0.7;to:0;loop:true;dur:1600">
+      </a-torus>
+      <a-sphere class="hittable" id="hit-ashoka" radius="0.07" position="0 0.02 0"
+        material="opacity:0;transparent:true;side:double"></a-sphere>
     </a-entity>
 
-    <!-- ════════════ STOP 3 — Jain Temple ════════════
-         Canvas pos ~ (190, 400) on 512×819
-         A-Frame: x = 190/512-0.5 = -0.129, y = 0.8-(400/819)*1.6 = 0.019
-    ═════════════════════════════════════════════════ -->
-    <a-entity
-      id="marker-jain"
-      position="-0.13 0.02 0.012"
-      visible="false"
-    >
-      <a-cylinder
-        height="0.055" radius="0.007"
-        position="0 0.007 0"
-        material="shader: flat; color: #6cc49a; emissive: #6cc49a; emissiveIntensity: 1"
-      ></a-cylinder>
-      <a-sphere
-        radius="0.021" position="0 0.042 0"
-        material="shader: flat; color: #6cc49a; emissive: #6cc49a; emissiveIntensity: 1"
-        animation="property: scale; from: 1 1 1; to: 1.45 1.45 1.45; loop: true; dir: alternate; dur: 820; easing: easeInOutSine"
-      ></a-sphere>
-      <a-torus radius="0.026" radius-tubular="0.003"
-        position="0 0.042 0" rotation="90 0 0"
-        material="shader: flat; color: #6cc49a; opacity: 0.75; transparent: true"
-        animation__s="property: scale; from: 1 1 1; to: 3 3 3; loop: true; dur: 1500; easing: easeOutQuad"
-        animation__o="property: material.opacity; from: 0.75; to: 0; loop: true; dur: 1500"
-      ></a-torus>
-      <a-sphere
-        class="hittable"
-        id="hit-jain"
-        radius="0.065"
-        position="0 0.02 0"
-        material="opacity: 0; transparent: true; side: double"
-      ></a-sphere>
+    <!-- ══════════════════════════════════════════
+         STOP 3  —  Jain Temple / Monastery V (centre)
+         Canvas ≈ (192, 400) on 512×819
+         af: x = 192/512 - 0.5 = -0.125
+             y = 0.8 - (400/819)*1.6 = 0.019
+    ══════════════════════════════════════════ -->
+    <a-entity id="marker-jain" position="-0.125 0.019 0.014" visible="false">
+      <a-cylinder height="0.055" radius="0.007" position="0 0.007 0"
+        material="shader:flat;color:#6cc49a;emissive:#6cc49a;emissiveIntensity:1"></a-cylinder>
+      <a-sphere radius="0.021" position="0 0.042 0"
+        material="shader:flat;color:#6cc49a;emissive:#6cc49a;emissiveIntensity:1"
+        animation="property:scale;from:1 1 1;to:1.45 1.45 1.45;loop:true;dir:alternate;dur:820;easing:easeInOutSine">
+      </a-sphere>
+      <a-torus radius="0.027" radius-tubular="0.003"
+        position="0 0.001 0" rotation="90 0 0"
+        material="shader:flat;color:#6cc49a;opacity:0.7;transparent:true"
+        animation__s="property:scale;from:1 1 1;to:3.2 3.2 3.2;loop:true;dur:1600;easing:easeOutQuad"
+        animation__o="property:material.opacity;from:0.7;to:0;loop:true;dur:1600">
+      </a-torus>
+      <a-sphere class="hittable" id="hit-jain" radius="0.07" position="0 0.02 0"
+        material="opacity:0;transparent:true;side:double"></a-sphere>
     </a-entity>
 
-  </a-entity>
+  </a-entity><!-- /ar-target -->
 </a-scene>
 
 
 <script>
-/* ═══════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════
    PATH-ANIMATOR  —  A-Frame component
-   Manages the canvas texture and drives the tour sequence.
-   ═══════════════════════════════════════════════════════════════ */
+   ════════════════════════════════════════════════════════════════════
+   Renders animated paths onto a canvas that is used as a texture on
+   the path-plane entity. Both paths are drawn using cubic Bézier
+   curves sampled at STEPS points.
+
+   Coordinate system  (all canvas pixel values for a 512 × 819 canvas):
+   ──────────────────────────────────────────────────────────────────
+   Path 1  Chaukhandi Stupa  →  Ashoka's Pillar
+           Follows the narrow road running along the WEST (left) edge
+           of the Deer Park, heading north.
+           Start  ≈ (80, 590)   [Chaukhandi stupa area]
+           CP1    ≈ (60, 455)   [along west road]
+           CP2    ≈ (42, 300)   [continuing north]
+           End    ≈ (50, 200)   [Ashoka's Pillar]
+
+   Path 2  Ashoka's Pillar  →  Jain Temple
+           Leaves the pillar heading east along the Asokan Railing
+           road, then curves south-east into the temple enclosure.
+           Start  ≈ (50, 200)   [Ashoka's Pillar]
+           CP1    ≈ (108, 188)  [east along railing road]
+           CP2    ≈ (165, 278)  [curving south-east]
+           End    ≈ (192, 400)  [Jain Temple / Monastery V]
+   ════════════════════════════════════════════════════════════════════ */
 AFRAME.registerComponent('path-animator', {
 
   init () {
-    /* ── Canvas setup ─────────────────────────────────────── */
+    /* ── Canvas ───────────────────────────────────────────── */
     this.W = 512; this.H = 819;
     this.cvs = document.createElement('canvas');
     this.cvs.width = this.W; this.cvs.height = this.H;
     this.ctx = this.cvs.getContext('2d');
 
     this.tex = new THREE.CanvasTexture(this.cvs);
-    this.texReady = false; // applied lazily in tick()
+    this.texReady = false;
 
     /* ── Tour state ───────────────────────────────────────── */
-    this.phase = 'idle';  // idle → path1 → gap1 → path2 → done
-    this.p1 = 0;
-    this.p2 = 0;
-    this.STEPS = 140;
-    this.SPEED = 1.25; // steps per frame (~60fps → ~9s per path)
+    // Phases: idle → path1 → pause1 → path2 → done
+    this.phase = 'idle';
+    this.p1 = 0;   // draw steps completed for path 1 (0..STEPS)
+    this.p2 = 0;   // draw steps completed for path 2 (0..STEPS)
+    this.STEPS = 160;
+    this.SPEED = 1.1;   // steps per frame — tune to taste
 
-    /* ── Bezier waypoints (canvas px, 512×819)
-         These follow the roads visible on the Sarnath map:
-
-         Path 1  Chaukhandi → Ashoka's Pillar
-                 Follows the west-side road running north
-                 up the left edge of the map.
-
-         Path 2  Ashoka's Pillar → Jain Temple
-                 Cuts right along the Asokan Railing road,
-                 then curves south-east into the temple complex.
-    ─────────────────────────────────────────────────────────── */
-    this._p1 = [
-      { x:  80, y: 585 }, // Chaukhandi area
-      { x:  62, y: 450 }, // up the left road
-      { x:  44, y: 310 }, // continuing north
-      { x:  48, y: 200 }  // Ashoka's Pillar
-    ];
-    this._p2 = [
-      { x:  48, y: 200 }, // Ashoka's Pillar
-      { x: 115, y: 185 }, // east along railing road
-      { x: 168, y: 278 }, // curving south-east
-      { x: 188, y: 398 }  // Jain Temple
+    /* ── Waypoints (canvas px) ────────────────────────────── */
+    this._wp1 = [
+      { x: 80,  y: 590 },  // Chaukhandi Stupa (start)
+      { x: 60,  y: 455 },  // up west road
+      { x: 42,  y: 300 },  // continuing north
+      { x: 50,  y: 200 }   // Ashoka's Pillar (end)
     ];
 
-    this._s1 = this._sampleBezier(this._p1, this.STEPS);
-    this._s2 = this._sampleBezier(this._p2, this.STEPS);
+    this._wp2 = [
+      { x: 50,  y: 200 },  // Ashoka's Pillar (start)
+      { x: 108, y: 188 },  // east along Asokan Railing road
+      { x: 165, y: 278 },  // curve south-east
+      { x: 192, y: 400 }   // Jain Temple (end)
+    ];
 
-    /* ── DOM refs ─────────────────────────────────────────── */
+    this._s1 = this._sampleCubic(this._wp1, this.STEPS);
+    this._s2 = this._sampleCubic(this._wp2, this.STEPS);
+
+    /* ── Marker entity refs ────────────────────────────────── */
     this._mC = document.getElementById('marker-chaukhandi');
     this._mA = document.getElementById('marker-ashoka');
     this._mJ = document.getElementById('marker-jain');
 
-    /* ── Start tour on targetFound ────────────────────────── */
+    /* ── Tour trigger ─────────────────────────────────────── */
     const self = this;
     const target = document.getElementById('ar-target');
 
     target.addEventListener('targetFound', () => {
-      document.getElementById('scan-hint').classList.add('hidden');
+      // Hide scan overlay
+      const ov = document.getElementById('scan-overlay');
+      ov.classList.add('fade-out');
+      setTimeout(() => ov.classList.add('gone'), 750);
+
+      // Show progress strip
       document.getElementById('stop-strip').classList.add('visible');
-      if (self.phase === 'idle') self._startTour();
+
+      // Start tour only once
+      if (self.phase === 'idle') {
+        self._startTour();
+      }
     });
+
     target.addEventListener('targetLost', () => {
-      document.getElementById('scan-hint').classList.remove('hidden');
+      setStatus('📍 Map lost — please re-point camera');
     });
   },
 
-  /* ── Kick off the tour ────────────────────────────────── */
+  /* ── Kick off tour ────────────────────────────────────── */
   _startTour () {
     const self = this;
-    // Brief pause, then show first marker
+
+    // Brief pause → show Chaukhandi marker
     setTimeout(() => {
       self._popMarker(self._mC);
-      self._reachDot(1, '#e8543a');
-      self._setBar(8);
+      self._litPip(1, '#e8543a');
+      setStatus('📍 Chaukhandi Stupa — tap to learn more');
+      setBar(8);
+
+      // Then begin path animation
       setTimeout(() => {
+        setStatus('🛤️  Tracing route to Ashoka\'s Pillar…');
         self.phase = 'path1';
-        self._setBar(14);
-      }, 1100);
-    }, 600);
+        setBar(14);
+      }, 2200);
+    }, 700);
   },
 
-  /* ── Pop a marker in with spring animation ────────────── */
+  /* ── Light up a progress pip in the HUD strip ────────────── */
+  _litPip (n, color) {
+    const pip = document.getElementById('pip-' + n);
+    if (!pip) return;
+    pip.style.background = color;
+    pip.style.borderColor = color;
+    pip.classList.add('lit');
+  },
+
+  /* ── Pop marker in with spring ─────────────────────────── */
   _popMarker (el) {
-    if (el.getAttribute('visible')) return;
+    if (el.getAttribute('visible') === true || el.getAttribute('visible') === 'true') return;
     el.setAttribute('visible', true);
     el.setAttribute('scale', '0.001 0.001 0.001');
     el.setAttribute('animation__pop',
-      'property: scale; from: 0.001 0.001 0.001; to: 1 1 1; dur: 560; easing: easeOutBack');
+      'property:scale;from:0.001 0.001 0.001;to:1 1 1;dur:580;easing:easeOutBack');
   },
 
-  /* ── Set progress bar ─────────────────────────────────── */
-  _setBar (pct) {
-    document.getElementById('tour-bar').style.width = pct + '%';
-  },
-
-  /* ── Light up a stop dot ──────────────────────────────── */
-  _reachDot (n, color) {
-    const dot = document.getElementById('dot-' + n);
-    if (dot) { dot.style.background = color; dot.classList.add('reached'); }
-  },
-
-  /* ── Cubic bezier sampler ─────────────────────────────── */
-  _sampleBezier (pts, n) {
+  /* ── Cubic Bézier sampler ─────────────────────────────── */
+  _sampleCubic (pts, n) {
     const s = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n, m = 1 - t;
@@ -479,56 +582,51 @@ AFRAME.registerComponent('path-animator', {
     return s;
   },
 
-  /* ── Draw one path up to step n ──────────────────────── */
-  _drawPath (samples, n, color, dashOff) {
+  /* ── Draw a path up to step n ─────────────────────────── */
+  _drawPath (samp, n, color, dashOff) {
     if (n <= 0) return;
     const ctx = this.ctx;
-    const end = Math.min(Math.floor(n), samples.length - 1);
+    const end = Math.min(Math.floor(n), samp.length - 1);
 
-    /* Glow halo */
+    // ① Outer glow
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 18;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.globalAlpha = 0.14;
-    ctx.shadowColor = color; ctx.shadowBlur = 22;
-    ctx.beginPath(); ctx.moveTo(samples[0].x, samples[0].y);
-    for (let i = 1; i <= end; i++) ctx.lineTo(samples[i].x, samples[i].y);
+    ctx.lineWidth = 20; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.12;
+    ctx.shadowColor = color; ctx.shadowBlur = 28;
+    this._tracePath(ctx, samp, end);
     ctx.stroke();
     ctx.restore();
 
-    /* Solid coloured baseline */
+    // ② Solid coloured base
     ctx.save();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 4.5;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.globalAlpha = 0.55;
-    ctx.beginPath(); ctx.moveTo(samples[0].x, samples[0].y);
-    for (let i = 1; i <= end; i++) ctx.lineTo(samples[i].x, samples[i].y);
+    ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.6;
+    this._tracePath(ctx, samp, end);
     ctx.stroke();
     ctx.restore();
 
-    /* Animated white dashes */
+    // ③ Animated white dashes marching along the path
     ctx.save();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.globalAlpha = 0.88;
-    ctx.setLineDash([10, 12]);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 4.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.92;
+    ctx.setLineDash([9, 13]);
     ctx.lineDashOffset = dashOff;
-    ctx.beginPath(); ctx.moveTo(samples[0].x, samples[0].y);
-    for (let i = 1; i <= end; i++) ctx.lineTo(samples[i].x, samples[i].y);
+    this._tracePath(ctx, samp, end);
     ctx.stroke();
     ctx.restore();
 
-    /* Traveling dot — shown only during active animation */
+    // ④ Traveling pulse dot (only while still animating)
     if (n < this.STEPS - 1) {
-      const tip = samples[end];
-      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 180);
+      const tip = samp[end];
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 170);
       ctx.save();
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = color; ctx.shadowBlur = 18;
-      ctx.beginPath(); ctx.arc(tip.x, tip.y, 5.5 + 2.5*pulse, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.shadowColor = color; ctx.shadowBlur = 22;
+      ctx.beginPath();
+      ctx.arc(tip.x, tip.y, 5 + 2.5 * pulse, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = color; ctx.shadowBlur = 0;
       ctx.beginPath(); ctx.arc(tip.x, tip.y, 3, 0, Math.PI * 2);
@@ -537,79 +635,96 @@ AFRAME.registerComponent('path-animator', {
     }
   },
 
-  /* ── Draw waypoint circles at completed stops ─────────── */
-  _drawWaypoint (x, y, color) {
+  _tracePath (ctx, samp, end) {
+    ctx.beginPath();
+    ctx.moveTo(samp[0].x, samp[0].y);
+    for (let i = 1; i <= end; i++) ctx.lineTo(samp[i].x, samp[i].y);
+  },
+
+  /* ── Draw a completed-stop dot on canvas ─────────────── */
+  _dot (x, y, color) {
     const ctx = this.ctx;
     ctx.save();
-    ctx.fillStyle = color;
-    ctx.shadowColor = color; ctx.shadowBlur = 10;
-    ctx.globalAlpha = 0.85;
-    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = color; ctx.shadowBlur = 12;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath(); ctx.arc(x, y, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = color; ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   },
 
   /* ── A-Frame tick ─────────────────────────────────────── */
   tick (time) {
-
-    /* Lazily attach canvas texture to the plane mesh */
+    /* Lazily bind canvas texture to plane mesh */
     if (!this.texReady) {
       const mesh = this.el.getObject3D('mesh');
       if (!mesh) return;
       mesh.material.map = this.tex;
       mesh.material.transparent = true;
-      mesh.material.alphaTest = 0.005;
+      mesh.material.alphaTest = 0.01;
       mesh.material.needsUpdate = true;
       this.texReady = true;
     }
 
     const self = this;
 
-    /* ── Advance phase ────────────────────────────────────── */
+    /* ── Phase: drawing path 1 ────────────────────────────── */
     if (this.phase === 'path1') {
       this.p1 = Math.min(this.p1 + this.SPEED, this.STEPS);
+
       if (this.p1 >= this.STEPS) {
-        this.phase = 'gap1';
-        this._setBar(52);
+        this.phase = 'pause1';
+        setBar(52);
         this._popMarker(this._mA);
-        this._reachDot(2, '#c9a84c');
+        this._litPip(2, '#c9a84c');
+        setStatus('📍 Ashoka\'s Pillar — tap to learn more');
         setTimeout(() => {
           self.phase = 'path2';
-          self._setBar(60);
-        }, 1100);
+          setStatus('🛤️  Tracing route to Jain Temple…');
+          setBar(60);
+        }, 2200);
       }
     }
 
+    /* ── Phase: drawing path 2 ────────────────────────────── */
     if (this.phase === 'path2') {
       this.p2 = Math.min(this.p2 + this.SPEED, this.STEPS);
+
       if (this.p2 >= this.STEPS) {
         this.phase = 'done';
-        this._setBar(100);
+        setBar(100);
         this._popMarker(this._mJ);
-        this._reachDot(3, '#6cc49a');
+        this._litPip(3, '#6cc49a');
+        setStatus('✨ Tour complete — tap any marker to explore');
         setTimeout(() => {
-          const bar = document.getElementById('tour-bar');
-          bar.style.opacity = '0';
-        }, 2000);
+          document.getElementById('tour-bar').style.opacity = '0';
+        }, 2500);
       }
     }
 
-    /* ── Clear and redraw canvas ────────────────────────── */
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.W, this.H);
+    /* ── Clear canvas then redraw everything ──────────────── */
+    this.ctx.clearRect(0, 0, this.W, this.H);
 
-    // Animated dash offset driven by time
-    const dashOff = -(time / 22) % 22;
+    const dashOff = -(time / 20) % 22;   // marching dash speed
 
     if (this.p1 > 0) {
+      // Draw start dot (Chaukhandi) once path has begun
+      this._dot(80, 590, '#e8543a');
       this._drawPath(this._s1, this.p1, '#e8543a', dashOff);
-      // Draw start waypoint once path has begun
-      this._drawWaypoint(80, 585, '#e8543a');
     }
+
     if (this.p2 > 0) {
+      // Junction dot (Ashoka's Pillar) as the two paths meet
+      this._dot(50, 200, '#c9a84c');
       this._drawPath(this._s2, this.p2, '#c9a84c', dashOff);
-      // Junction dot
-      this._drawWaypoint(48, 200, '#c9a84c');
+    }
+
+    /* Always keep path 1 fully visible once drawn */
+    if (this.p1 >= this.STEPS && this.p2 === 0) {
+      this._dot(80, 590, '#e8543a');
+      this._drawPath(this._s1, this.STEPS, '#e8543a', dashOff);
+      this._dot(50, 200, '#c9a84c');
     }
 
     this.tex.needsUpdate = true;
@@ -617,21 +732,36 @@ AFRAME.registerComponent('path-animator', {
 });
 
 
-/* ═══════════════════════════════════════════════════════════════
-   MARKER CLICK → INFO PANEL
-   A-Frame fires 'click' on entities when the cursor intersects them.
-   On mobile: any screen tap triggers this if cursor is over the object.
-   ═══════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   PANEL + HUD HELPERS
+   ════════════════════════════════════════════════════════════════════ */
+
+function setBar (pct) {
+  document.getElementById('tour-bar').style.width = pct + '%';
+}
+
+function setStatus (msg) {
+  const chip = document.getElementById('status-chip');
+  chip.classList.remove('hide');
+  chip.textContent = msg;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   MARKER CLICK → OPEN INFO PANEL
+   ════════════════════════════════════════════════════════════════════
+   A-Frame fires 'click' on entities when the raycasting cursor
+   intersects them. On mobile a screen tap fires the click.
+   ════════════════════════════════════════════════════════════════════ */
 window.addEventListener('DOMContentLoaded', () => {
 
-  // Map hit-sphere id → panel id
-  const HITS = {
+  const MAP = {
     'hit-chaukhandi' : 'panel-chaukhandi',
     'hit-ashoka'     : 'panel-ashoka',
     'hit-jain'       : 'panel-jain'
   };
 
-  Object.entries(HITS).forEach(([hitId, panelId]) => {
+  Object.entries(MAP).forEach(([hitId, panelId]) => {
     const el = document.getElementById(hitId);
     if (!el) return;
     el.addEventListener('click', () => openPanel(panelId));
@@ -639,22 +769,27 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function openPanel (id) {
-  // Close any open panels first
+  // Close any other open panels first
   document.querySelectorAll('.info-panel.active')
-    .forEach(p => p.classList.remove('active'));
+    .forEach(p => { if (p.id !== id) p.classList.remove('active'); });
+
   const panel = document.getElementById(id);
-  if (panel) {
-    panel.classList.add('active');
-    // Re-trigger animation on re-open
-    panel.style.animation = 'none';
-    panel.offsetHeight; // reflow
-    panel.style.animation = '';
-  }
+  if (!panel) return;
+
+  // Re-trigger entry animation on every open
+  panel.classList.remove('active');
+  panel.style.animation = 'none';
+  void panel.offsetHeight;            // force reflow
+  panel.style.animation = '';
+  panel.classList.add('active');
+
+  document.getElementById('tap-hint').classList.add('hide');
 }
 
 function closePanel (id) {
   const panel = document.getElementById(id);
   if (panel) panel.classList.remove('active');
+  document.getElementById('tap-hint').classList.remove('hide');
 }
 </script>
 </body>
