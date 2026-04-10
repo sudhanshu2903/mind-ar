@@ -8,19 +8,26 @@
 
   <!--
     COI Service Worker — MUST be loaded first, before anything else.
-    On GitHub Pages (and any host that can't set HTTP headers),
-    this script registers a service worker that injects:
-      Cross-Origin-Opener-Policy: same-origin
-      Cross-Origin-Embedder-Policy: require-corp
-    Those headers enable SharedArrayBuffer, which MindAR's WASM
-    tracking engine requires. Without them getUserMedia is never
-    reached and the camera prompt never appears.
-    The page will reload once automatically after the SW activates.
+
+    FIX: force "credentialless" COEP mode so CDN scripts (jsDelivr)
+    loaded via plain <script> tags — which produce opaque (no-CORS)
+    responses — are NOT blocked by COEP require-corp.
+
+    With credentialless mode:
+      • cross-origin resources are fetched without credentials
+      • SharedArrayBuffer is still available (crossOriginIsolated = true)
+      • no CORP header required on CDN sub-resources
   -->
+  <script>
+    window.coi = {
+      coepCredentialless: () => true   // ← always use credentialless, never require-corp
+    };
+  </script>
   <script src="coi-serviceworker.js"></script>
 
-  <!-- MindAR + A-Frame (MindAR bundles its own A-Frame 1.4) -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <!-- MindAR + A-Frame — crossorigin="anonymous" makes this a proper
+       CORS fetch so the SW can inspect / modify the response headers  -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" crossorigin="anonymous"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
