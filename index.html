@@ -25,10 +25,14 @@
   </script>
   <script src="coi-serviceworker.js"></script>
 
-  <!-- MindAR + A-Frame — crossorigin="anonymous" makes this a proper
-       CORS fetch so the SW can inspect / modify the response headers  -->
+  <!--
+    Load A-Frame FIRST as a standalone global so window.AFRAME is already
+    defined when the MindAR bundle executes. This defeats the race condition.
+    NOTE: mindar-image.prod.js is an ES module (needs type="module") so we
+    must use mindar-image-aframe.prod.js, but with A-Frame pre-loaded.
+  -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" crossorigin="anonymous"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -355,8 +359,8 @@
   <a-camera position="0 0 0" look-controls="enabled: false">
     <a-cursor
       fuse="false"
-      raycaster="objects: .hittable; far: 6; recursive: false"
-      material="color: rgba(255,255,255,0.5); shader: flat; opacity: 0.65; transparent: true"
+      raycaster="objects: .hittable; far: 6"
+      material="color: white; shader: flat; opacity: 0.65; transparent: true"
       geometry="primitive: ring; radiusInner: 0.004; radiusOuter: 0.007"
       animation__click="property: scale; startEvents: click; from: 0.7 0.7 0.7; to: 1 1 1; dur: 180"
     ></a-cursor>
@@ -393,10 +397,10 @@
     <a-entity id="marker-chaukhandi" position="-0.344 -0.352 0.014" visible="false">
       <!-- stem -->
       <a-cylinder height="0.055" radius="0.007" position="0 0.007 0"
-        material="shader:flat;color:#e8543a;emissive:#e8543a;emissiveIntensity:1"></a-cylinder>
+        material="shader:flat;color:#e8543a"></a-cylinder>
       <!-- head (pulsing) -->
       <a-sphere radius="0.021" position="0 0.042 0"
-        material="shader:flat;color:#e8543a;emissive:#e8543a;emissiveIntensity:1"
+        material="shader:flat;color:#e8543a"
         animation="property:scale;from:1 1 1;to:1.45 1.45 1.45;loop:true;dir:alternate;dur:820;easing:easeInOutSine">
       </a-sphere>
       <!-- ripple ring -->
@@ -419,9 +423,9 @@
     ══════════════════════════════════════════ -->
     <a-entity id="marker-ashoka" position="-0.402 0.409 0.014" visible="false">
       <a-cylinder height="0.055" radius="0.007" position="0 0.007 0"
-        material="shader:flat;color:#c9a84c;emissive:#c9a84c;emissiveIntensity:1"></a-cylinder>
+        material="shader:flat;color:#c9a84c"></a-cylinder>
       <a-sphere radius="0.021" position="0 0.042 0"
-        material="shader:flat;color:#c9a84c;emissive:#c9a84c;emissiveIntensity:1"
+        material="shader:flat;color:#c9a84c"
         animation="property:scale;from:1 1 1;to:1.45 1.45 1.45;loop:true;dir:alternate;dur:820;easing:easeInOutSine">
       </a-sphere>
       <a-torus radius="0.027" radius-tubular="0.003"
@@ -442,9 +446,9 @@
     ══════════════════════════════════════════ -->
     <a-entity id="marker-jain" position="-0.125 0.019 0.014" visible="false">
       <a-cylinder height="0.055" radius="0.007" position="0 0.007 0"
-        material="shader:flat;color:#6cc49a;emissive:#6cc49a;emissiveIntensity:1"></a-cylinder>
+        material="shader:flat;color:#6cc49a"></a-cylinder>
       <a-sphere radius="0.021" position="0 0.042 0"
-        material="shader:flat;color:#6cc49a;emissive:#6cc49a;emissiveIntensity:1"
+        material="shader:flat;color:#6cc49a"
         animation="property:scale;from:1 1 1;to:1.45 1.45 1.45;loop:true;dir:alternate;dur:820;easing:easeInOutSine">
       </a-sphere>
       <a-torus radius="0.027" radius-tubular="0.003"
